@@ -23,9 +23,10 @@ async def connect(address: str = "udp://:14540") -> System:
     return drone
 
 
-def to_mission(wps: List[Waypoint], speed: float) -> MissionPlan:
+def to_mission(wps: List[Waypoint]) -> MissionPlan:
+    """Speed is NaN (unchanged) so runtime set_current_speed isn't reset per waypoint."""
     nan = float("nan")
-    items = [MissionItem(w.lat, w.lon, w.alt, speed, True, nan, nan,
+    items = [MissionItem(w.lat, w.lon, w.alt, nan, True, nan, nan,
                          MissionItem.CameraAction.NONE, nan, nan, nan, nan, nan,
                          MissionItem.VehicleAction.NONE) for w in wps]
     return MissionPlan(items)
@@ -34,6 +35,7 @@ def to_mission(wps: List[Waypoint], speed: float) -> MissionPlan:
 async def spray_loop(drone: System, ctl: SprayController, mission_done: asyncio.Event):
     """Stream position; actuate the pump and adjust speed on proximity."""
     last_speed, last_pump = None, False
+    await drone.telemetry.set_rate_position(10.0)  # 10 Hz so a 1.5 m zone isn't skipped
     async for pos in drone.telemetry.position():
         print(f"pos lat={pos.latitude_deg:.7f} lon={pos.longitude_deg:.7f} "
               f"alt={pos.relative_altitude_m:.1f}m")
@@ -53,7 +55,8 @@ async def spray_loop(drone: System, ctl: SprayController, mission_done: asyncio.
 
 async def fly(drone: System, wps: List[Waypoint], ctl: SprayController):
     await drone.mission.set_return_to_launch_after_mission(True)
-    await drone.mission.upload_mission(to_mission(wps, ctl.cruise_speed))
+    await drone.mission.upload_mission(to_mission(wps))
+    await drone.action.set_current_speed(ctl.cruise_speed)
     await drone.action.arm()
     done = asyncio.Event()
     task = asyncio.create_task(spray_loop(drone, ctl, done))
