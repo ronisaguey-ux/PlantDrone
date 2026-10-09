@@ -24,3 +24,11 @@ def test_spray_trigger():
     assert pump and hit == 0 and speed == c.spray_speed
     assert c.update(47.001, 8.0)[0] is False
     assert distance_m(47, 8, 47.001, 8) > 100
+
+
+def test_simulated_flight_hits_all_targets():
+    from plantdrone.sim import simulate
+    from plantdrone.sprayer import load_targets
+    wps = generate_lawnmower(B, 10, 3)
+    ctl = SprayController(load_targets("data/targets.csv"))
+    assert sorted(simulate(wps, ctl)) == [0, 1, 2]
